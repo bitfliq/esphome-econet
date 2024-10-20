@@ -6,7 +6,7 @@ econet:
 
 packages:
   zone2: !include
-    file: econet_hvac_zone_template_700.yaml
+    file: econet_hvac_extra_zone_template_700.yaml
     vars:
       zonename: ${zone2name}
       zonenumber: "2"
