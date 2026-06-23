@@ -320,28 +320,19 @@ void Econet::parse_message_(bool is_tx) {
 // followed by the bytes of the enum text padded with trailing whitespace.
 void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8_t *p, uint8_t len) {
   EconetDatapointType item_type = EconetDatapointType(p[0] & 0x7F);
-  // Zone address prefixing: zone thermostats share datapoint names, prefix to distinguish
-  EconetDatapointID effective_id = datapoint_id;
-  if (datapoint_id.address == Econet::ZONE_THERMOSTAT_2) {
-    effective_id.name = "ZONE2_" + datapoint_id.name;
-  } else if (datapoint_id.address == Econet::ZONE_THERMOSTAT_3) {
-    effective_id.name = "ZONE3_" + datapoint_id.name;
-  } else if (datapoint_id.address == Econet::ZONE_THERMOSTAT_4) {
-    effective_id.name = "ZONE4_" + datapoint_id.name;
-  }
 
   switch (item_type) {
     case EconetDatapointType::FLOAT: {
       p += 3;
       len -= 3;
       if (len != FLOAT_SIZE) {
-        ESP_LOGE(TAG, "Expected len of %d but was %d for %s", FLOAT_SIZE, len, effective_id.name.c_str());
+        ESP_LOGE(TAG, "Expected len of %d but was %d for %s", FLOAT_SIZE, len, datapoint_id.name.c_str());
         return;
       }
       float item_value = bytes_to_float(p);
-      ESP_LOGV(TAG, "  %s : %f", effective_id.name.c_str(), item_value);
+      ESP_LOGV(TAG, "  %s : %f", datapoint_id.name.c_str(), item_value);
       this->send_datapoint_(
-          effective_id,
+          datapoint_id,
           EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = item_value, .type = item_type});
       break;
     }
@@ -349,8 +340,8 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       p += 3;
       len -= 3;
       std::string s = trim_trailing_whitespace((const char *) p, len);
-      ESP_LOGV(TAG, "  %s : (%s)", effective_id.name.c_str(), s.c_str());
-      this->send_datapoint_(effective_id,
+      ESP_LOGV(TAG, "  %s : (%s)", datapoint_id.name.c_str(), s.c_str());
+      this->send_datapoint_(datapoint_id,
                             EconetDatapoint{.value_raw = {}, .value_string = s, .value_float = 0, .type = item_type});
       break;
     }
@@ -358,19 +349,19 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       p += 3;
       len -= 3;
       if (len < 2) {
-        ESP_LOGE(TAG, "Expected len of at least 2 but was %d for %s", len, effective_id.name.c_str());
+        ESP_LOGE(TAG, "Expected len of at least 2 but was %d for %s", len, datapoint_id.name.c_str());
         return;
       }
       uint8_t item_value = p[0];
       uint8_t item_text_len = p[1];
       if (item_text_len != len - 2) {
-        ESP_LOGE(TAG, "Expected text len of %d but was %d for %s", len - 2, item_text_len, effective_id.name.c_str());
+        ESP_LOGE(TAG, "Expected text len of %d but was %d for %s", len - 2, item_text_len, datapoint_id.name.c_str());
         return;
       }
       std::string s = trim_trailing_whitespace((const char *) p + 2, item_text_len);
-      ESP_LOGV(TAG, "  %s : %d (%s)", effective_id.name.c_str(), item_value, s.c_str());
+      ESP_LOGV(TAG, "  %s : %d (%s)", datapoint_id.name.c_str(), item_value, s.c_str());
       this->send_datapoint_(
-          effective_id,
+          datapoint_id,
           EconetDatapoint{.value_raw = {}, .value_string = s, .value_enum = item_value, .type = item_type});
       break;
     }
@@ -378,8 +369,8 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       // Handled separately since it seems it cannot be requested together with other objects.
       break;
     case EconetDatapointType::UNSUPPORTED:
-      ESP_LOGW(TAG, "  %s : UNSUPPORTED", effective_id.name.c_str());
-      this->send_datapoint_(effective_id,
+      ESP_LOGW(TAG, "  %s : UNSUPPORTED", datapoint_id.name.c_str());
+      this->send_datapoint_(datapoint_id,
                             EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = 0, .type = item_type});
       break;
   }
