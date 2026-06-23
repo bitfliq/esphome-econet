@@ -13,6 +13,7 @@ econet:
   request_mod_addresses:
     5: ${furnace_address}
     6: ${furnace_address}
+    10: 0x380
   on_datapoint_update:
     - sensor_datapoint: HWSTATUS
       datapoint_type: raw
@@ -503,7 +504,7 @@ sensor:
     name: Zone1 CFM
     # id: z${zoneid}_cfm
     sensor_datapoint: Z1CFMDSP
-    request_mod: 3
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
@@ -513,7 +514,7 @@ sensor:
     name: Zone2 CFM
     # id: z${zoneid}_cfm
     sensor_datapoint: Z2CFMDSP
-    request_mod: 3 
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
@@ -523,7 +524,7 @@ sensor:
     name: Zone3 CFM
     # id: z${zoneid}_cfm
     sensor_datapoint: Z3CFMDSP
-    request_mod: 3
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
@@ -532,7 +533,7 @@ sensor:
   - platform: econet
     name: Zone4 CFM
     sensor_datapoint: Z4CFMDSP
-    request_mod: 3
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
@@ -541,7 +542,7 @@ sensor:
   - platform: econet
     name: Zone5 CFM
     sensor_datapoint: Z5CFMDSP
-    request_mod: 3
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
@@ -550,7 +551,7 @@ sensor:
   - platform: econet
     name: Zone6 CFM
     sensor_datapoint: Z6CFMDSP
-    request_mod: 3
+    request_mod: 10
     accuracy_decimals: 1
     state_class: "measurement"
     entity_category: "diagnostic"
