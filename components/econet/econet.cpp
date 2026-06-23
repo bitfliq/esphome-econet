@@ -238,6 +238,11 @@ void Econet::parse_message_(bool is_tx) {
           this->send_datapoint_(
               EconetDatapointID{.name = datapoint_id, .address = src_adr},
               EconetDatapoint{.value_raw = raw, .value_string = "", .value_float = 0, .type = item_type});
+          if (datapoint_id == "HWSTATUS" && src_adr == Econet::FURNACE) {
+            handle_furnace_hwstatus(raw);
+          } else if (datapoint_id == "ZONESTAT") {
+            handle_zonestat(raw, src_adr);
+          }
         }
       } else if (this->read_req_.type == 2) {
         // 1st pass to validate response and avoid any buffer over-read
@@ -320,18 +325,26 @@ void Econet::parse_message_(bool is_tx) {
 // followed by the bytes of the enum text padded with trailing whitespace.
 void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8_t *p, uint8_t len) {
   EconetDatapointType item_type = EconetDatapointType(p[0] & 0x7F);
+  // Zone address prefixing: zone thermostats share datapoint names, prefix to distinguish
+  EconetDatapointID effective_id = datapoint_id;
+  if (datapoint_id.address == Econet::ZONE_THERMOSTAT_2) {
+    effective_id.name = "ZONE2_" + datapoint_id.name;
+  } else if (datapoint_id.address == Econet::ZONE_THERMOSTAT_3) {
+    effective_id.name = "ZONE3_" + datapoint_id.name;
+  }
+
   switch (item_type) {
     case EconetDatapointType::FLOAT: {
       p += 3;
       len -= 3;
       if (len != FLOAT_SIZE) {
-        ESP_LOGE(TAG, "Expected len of %d but was %d for %s", FLOAT_SIZE, len, datapoint_id.name.c_str());
+        ESP_LOGE(TAG, "Expected len of %d but was %d for %s", FLOAT_SIZE, len, effective_id.name.c_str());
         return;
       }
       float item_value = bytes_to_float(p);
-      ESP_LOGV(TAG, "  %s : %f", datapoint_id.name.c_str(), item_value);
+      ESP_LOGV(TAG, "  %s : %f", effective_id.name.c_str(), item_value);
       this->send_datapoint_(
-          datapoint_id,
+          effective_id,
           EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = item_value, .type = item_type});
       break;
     }
@@ -339,8 +352,8 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       p += 3;
       len -= 3;
       std::string s = trim_trailing_whitespace((const char *) p, len);
-      ESP_LOGV(TAG, "  %s : (%s)", datapoint_id.name.c_str(), s.c_str());
-      this->send_datapoint_(datapoint_id,
+      ESP_LOGV(TAG, "  %s : (%s)", effective_id.name.c_str(), s.c_str());
+      this->send_datapoint_(effective_id,
                             EconetDatapoint{.value_raw = {}, .value_string = s, .value_float = 0, .type = item_type});
       break;
     }
@@ -348,19 +361,19 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       p += 3;
       len -= 3;
       if (len < 2) {
-        ESP_LOGE(TAG, "Expected len of at least 2 but was %d for %s", len, datapoint_id.name.c_str());
+        ESP_LOGE(TAG, "Expected len of at least 2 but was %d for %s", len, effective_id.name.c_str());
         return;
       }
       uint8_t item_value = p[0];
       uint8_t item_text_len = p[1];
       if (item_text_len != len - 2) {
-        ESP_LOGE(TAG, "Expected text len of %d but was %d for %s", len - 2, item_text_len, datapoint_id.name.c_str());
+        ESP_LOGE(TAG, "Expected text len of %d but was %d for %s", len - 2, item_text_len, effective_id.name.c_str());
         return;
       }
       std::string s = trim_trailing_whitespace((const char *) p + 2, item_text_len);
-      ESP_LOGV(TAG, "  %s : %d (%s)", datapoint_id.name.c_str(), item_value, s.c_str());
+      ESP_LOGV(TAG, "  %s : %d (%s)", effective_id.name.c_str(), item_value, s.c_str());
       this->send_datapoint_(
-          datapoint_id,
+          effective_id,
           EconetDatapoint{.value_raw = {}, .value_string = s, .value_enum = item_value, .type = item_type});
       break;
     }
@@ -368,11 +381,134 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
       // Handled separately since it seems it cannot be requested together with other objects.
       break;
     case EconetDatapointType::UNSUPPORTED:
-      ESP_LOGW(TAG, "  %s : UNSUPPORTED", datapoint_id.name.c_str());
-      this->send_datapoint_(datapoint_id,
+      ESP_LOGW(TAG, "  %s : UNSUPPORTED", effective_id.name.c_str());
+      this->send_datapoint_(effective_id,
                             EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = 0, .type = item_type});
       break;
   }
+}
+
+EconetDatapoint get_float_datapoint(uint16_t val) {
+  EconetDatapointType edt = EconetDatapointType(0);
+  float f = val;
+  return EconetDatapoint{.type = edt, .value_float = f};
+}
+
+EconetDatapoint get_float_datapoint(uint8_t val) {
+  EconetDatapointType edt = EconetDatapointType(0);
+  float f = val;
+  return EconetDatapoint{.type = edt, .value_float = f};
+}
+
+EconetDatapoint get_float_datapoint(float val) {
+  EconetDatapointType edt = EconetDatapointType(0);
+  return EconetDatapoint{.type = edt, .value_float = val};
+}
+
+uint16_t convert_vector_to_uint16(uint16_t pos, std::vector<uint8_t> data) {
+  return (((uint16_t) data[pos]) * 256) + data[pos + 1];
+}
+
+void Econet::handle_furnace_hwstatus(std::vector<uint8_t> &x) {
+  // need a length check here.
+  // credit for parsing also to stockmopar
+  ESP_LOGI(TAG, "  HWSTATUS-handle_hwstatus");
+  uint16_t fan_cfm_ = convert_vector_to_uint16(13, x);
+  uint16_t fan_rpm_ = convert_vector_to_uint16(17, x);
+
+  float return_temp_ = convert_vector_to_uint16(50, x) / 10.0;
+  float outside_temp_ = convert_vector_to_uint16(52, x) / 10.0;
+  float supply_temp_ = convert_vector_to_uint16(145, x) / 10.0;
+  float static_pressure_ = convert_vector_to_uint16(15, x) / 5280.0;
+
+  uint8_t heat_percent_ = x[11];
+  uint8_t cool_stage_ = x[12];
+  float flame_sensor_ = ((float) x[33]) / 10;
+
+  uint16_t lh_lh_ = (x[129] << 8) + x[130];
+  uint16_t hh_lh_ = (x[132] << 8) + x[133];
+
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FAN_CFM", .address = 0}, get_float_datapoint(fan_cfm_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FAN_RPM", .address = 0}, get_float_datapoint(fan_rpm_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_LOWHEAT_LIFETIMEHOURS", .address = 0}, get_float_datapoint(lh_lh_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_HIGHHEAT_LIFETIMEHOURS", .address = 0}, get_float_datapoint(hh_lh_));
+
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_OUTSIDE_TEMP", .address = 0}, get_float_datapoint(outside_temp_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_RETURN_TEMP", .address = 0}, get_float_datapoint(return_temp_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_SUPPLY_TEMP", .address = 0}, get_float_datapoint(supply_temp_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_STATIC_PRESSURE", .address = 0}, get_float_datapoint(static_pressure_));
+
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_HEAT_PERCENT", .address = 0}, get_float_datapoint(heat_percent_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_COOL_STAGE", .address = 0}, get_float_datapoint(cool_stage_));
+  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FURNACE_FLAME_SENSOR", .address = 0}, get_float_datapoint(flame_sensor_));
+
+  // if(heat_per_ > 90)
+  // {
+  //     id(operating_mode).publish_state("High Heat");
+  // }
+  // else if(heat_per_ > 0)
+  // {
+  //     id(operating_mode).publish_state("Low Heat");
+  // }
+  // else if(cool_stage_ > 0)
+  // {
+  //     id(operating_mode).publish_state("Cooling");
+  // }
+  // else if(airhandler_cfm_ > 0)
+  // {
+  //     id(operating_mode).publish_state("Fan");
+  // }
+  // else
+  // {
+  //     id(operating_mode).publish_state("Off");
+  // }
+}
+
+void Econet::handle_zonestat(std::vector<uint8_t> &data, uint32_t src_adr) {
+  if (src_adr != Econet::ZONE_CONTROL) {
+    return;
+  }
+  EconetDatapointType edt = EconetDatapointType(0);
+
+  uint8_t zone1 = data[11] * 100.0 / 35;  // multiply by 35 for calibration
+  float f = zone1;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE1_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone2 = data[12] * 100.0 / 35;  //
+  f = zone2;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE2_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone3 = data[13] * 100.0 / 35;  //
+  f = zone3;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE3_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone4 = data[20] * 100.0 / 35;  //
+  f = zone4;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE4_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone5 = data[21] * 100.0 / 35;  //
+  f = zone5;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE5_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone6 = data[22] * 100.0 / 35;  //
+  f = zone6;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE6_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone7 = data[23] * 100.0 / 35;  //
+  f = zone7;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE7_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
+
+  uint8_t zone8 = data[24] * 100.0 / 35;  //
+  f = zone8;
+  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE8_PERCENT_OPEN", .address = 0},
+                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
 }
 
 void Econet::read_buffer_(int bytes_available) {
