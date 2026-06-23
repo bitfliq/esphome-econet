@@ -10,27 +10,3 @@ sensor:
     entity_category: "diagnostic"
     unit_of_measurement: "cfm"
 
-  - platform: econet
-    src_address: ${zone_thermostat_address}
-    id: zone${zonenumber}_temperature
-    name: ${zonename} Temperature
-    sensor_datapoint: SPT
-    request_mod: none
-    device_class: temperature
-    unit_of_measurement: "°F"
-    state_class: measurement
-    filters:
-      - delta: 0.1
-
-  - platform: econet
-    src_address: ${zone_thermostat_address}
-    id: zone${zonenumber}_humidity
-    name: ${zonename} Humidity
-    sensor_datapoint: RELH7005
-    request_mod: none
-    unit_of_measurement: "%"
-    accuracy_decimals: 1
-    device_class: humidity
-    state_class: measurement
-    filters:
-      - delta: 0.3
