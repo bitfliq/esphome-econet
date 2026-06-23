@@ -238,9 +238,7 @@ void Econet::parse_message_(bool is_tx) {
           this->send_datapoint_(
               EconetDatapointID{.name = datapoint_id, .address = src_adr},
               EconetDatapoint{.value_raw = raw, .value_string = "", .value_float = 0, .type = item_type});
-          if (datapoint_id == "HWSTATUS" && src_adr == Econet::FURNACE) {
-            handle_furnace_hwstatus(raw);
-          } else if (datapoint_id == "ZONESTAT") {
+          if (datapoint_id == "ZONESTAT") {
             handle_zonestat(raw, src_adr);
           }
         }
@@ -331,6 +329,8 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
     effective_id.name = "ZONE2_" + datapoint_id.name;
   } else if (datapoint_id.address == Econet::ZONE_THERMOSTAT_3) {
     effective_id.name = "ZONE3_" + datapoint_id.name;
+  } else if (datapoint_id.address == Econet::ZONE_THERMOSTAT_4) {
+    effective_id.name = "ZONE4_" + datapoint_id.name;
   }
 
   switch (item_type) {
@@ -386,82 +386,6 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
                             EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = 0, .type = item_type});
       break;
   }
-}
-
-EconetDatapoint get_float_datapoint(uint16_t val) {
-  EconetDatapointType edt = EconetDatapointType(0);
-  float f = val;
-  return EconetDatapoint{.type = edt, .value_float = f};
-}
-
-EconetDatapoint get_float_datapoint(uint8_t val) {
-  EconetDatapointType edt = EconetDatapointType(0);
-  float f = val;
-  return EconetDatapoint{.type = edt, .value_float = f};
-}
-
-EconetDatapoint get_float_datapoint(float val) {
-  EconetDatapointType edt = EconetDatapointType(0);
-  return EconetDatapoint{.type = edt, .value_float = val};
-}
-
-uint16_t convert_vector_to_uint16(uint16_t pos, std::vector<uint8_t> data) {
-  return (((uint16_t) data[pos]) * 256) + data[pos + 1];
-}
-
-void Econet::handle_furnace_hwstatus(std::vector<uint8_t> &x) {
-  // need a length check here.
-  // credit for parsing also to stockmopar
-  ESP_LOGI(TAG, "  HWSTATUS-handle_hwstatus");
-  uint16_t fan_cfm_ = convert_vector_to_uint16(13, x);
-  uint16_t fan_rpm_ = convert_vector_to_uint16(17, x);
-
-  float return_temp_ = convert_vector_to_uint16(50, x) / 10.0;
-  float outside_temp_ = convert_vector_to_uint16(52, x) / 10.0;
-  float supply_temp_ = convert_vector_to_uint16(145, x) / 10.0;
-  float static_pressure_ = convert_vector_to_uint16(15, x) / 5280.0;
-
-  uint8_t heat_percent_ = x[11];
-  uint8_t cool_stage_ = x[12];
-  float flame_sensor_ = ((float) x[33]) / 10;
-
-  uint16_t lh_lh_ = (x[129] << 8) + x[130];
-  uint16_t hh_lh_ = (x[132] << 8) + x[133];
-
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FAN_CFM", .address = 0}, get_float_datapoint(fan_cfm_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FAN_RPM", .address = 0}, get_float_datapoint(fan_rpm_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_LOWHEAT_LIFETIMEHOURS", .address = 0}, get_float_datapoint(lh_lh_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_HIGHHEAT_LIFETIMEHOURS", .address = 0}, get_float_datapoint(hh_lh_));
-
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_OUTSIDE_TEMP", .address = 0}, get_float_datapoint(outside_temp_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_RETURN_TEMP", .address = 0}, get_float_datapoint(return_temp_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_SUPPLY_TEMP", .address = 0}, get_float_datapoint(supply_temp_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_STATIC_PRESSURE", .address = 0}, get_float_datapoint(static_pressure_));
-
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_HEAT_PERCENT", .address = 0}, get_float_datapoint(heat_percent_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_COOL_STAGE", .address = 0}, get_float_datapoint(cool_stage_));
-  this->send_datapoint_(EconetDatapointID{.name = "HWSTATUS_FURNACE_FLAME_SENSOR", .address = 0}, get_float_datapoint(flame_sensor_));
-
-  // if(heat_per_ > 90)
-  // {
-  //     id(operating_mode).publish_state("High Heat");
-  // }
-  // else if(heat_per_ > 0)
-  // {
-  //     id(operating_mode).publish_state("Low Heat");
-  // }
-  // else if(cool_stage_ > 0)
-  // {
-  //     id(operating_mode).publish_state("Cooling");
-  // }
-  // else if(airhandler_cfm_ > 0)
-  // {
-  //     id(operating_mode).publish_state("Fan");
-  // }
-  // else
-  // {
-  //     id(operating_mode).publish_state("Off");
-  // }
 }
 
 void Econet::handle_zonestat(std::vector<uint8_t> &data, uint32_t src_adr) {

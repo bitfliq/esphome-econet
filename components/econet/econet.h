@@ -141,7 +141,6 @@ class Econet : public Component, public uart::UARTDevice {
   void parse_rx_message_();
   void parse_tx_message_();
   void handle_response_(const EconetDatapointID &datapoint_id, const uint8_t *p, uint8_t len);
-  void handle_furnace_hwstatus(std::vector<uint8_t> &x);
   void handle_zonestat(std::vector<uint8_t> &x, uint32_t src_adr);
 
   void transmit_message_(uint8_t command, const uint8_t *data, size_t len, uint32_t dst_adr = 0, uint32_t src_adr = 0);
@@ -209,6 +208,7 @@ class Econet : public Component, public uart::UARTDevice {
   static const uint32_t CONTROL_CENTER = 0x380;           // 80 00 03 80
   static const uint32_t ZONE_THERMOSTAT_2 = 0x680;
   static const uint32_t ZONE_THERMOSTAT_3 = 0x681;
+  static const uint32_t ZONE_THERMOSTAT_4 = 0x682;
   static const uint32_t ZONE_CONTROL = 0x540;
   static const uint32_t BROADCAST = 0xf1;
 };
