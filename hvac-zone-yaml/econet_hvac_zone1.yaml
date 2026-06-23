@@ -16,3 +16,6 @@ packages:
       zone_thermostat_requestmod: 10
       primary_thermostat_requestmod: 10
       zone_thermostat_address: 0x380
+
+sensor:
+  - id: !remove thermostat_current_humidity
