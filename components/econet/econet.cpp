@@ -238,9 +238,6 @@ void Econet::parse_message_(bool is_tx) {
           this->send_datapoint_(
               EconetDatapointID{.name = datapoint_id, .address = src_adr},
               EconetDatapoint{.value_raw = raw, .value_string = "", .value_float = 0, .type = item_type});
-          if (datapoint_id == "ZONESTAT") {
-            handle_zonestat(raw, src_adr);
-          }
         }
       } else if (this->read_req_.type == 2) {
         // 1st pass to validate response and avoid any buffer over-read
@@ -386,53 +383,6 @@ void Econet::handle_response_(const EconetDatapointID &datapoint_id, const uint8
                             EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = 0, .type = item_type});
       break;
   }
-}
-
-void Econet::handle_zonestat(std::vector<uint8_t> &data, uint32_t src_adr) {
-  if (src_adr != Econet::ZONE_CONTROL) {
-    return;
-  }
-  EconetDatapointType edt = EconetDatapointType(0);
-
-  uint8_t zone1 = data[11] * 100.0 / 35;  // multiply by 35 for calibration
-  float f = zone1;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE1_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone2 = data[12] * 100.0 / 35;  //
-  f = zone2;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE2_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone3 = data[13] * 100.0 / 35;  //
-  f = zone3;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE3_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone4 = data[20] * 100.0 / 35;  //
-  f = zone4;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE4_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone5 = data[21] * 100.0 / 35;  //
-  f = zone5;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE5_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone6 = data[22] * 100.0 / 35;  //
-  f = zone6;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE6_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone7 = data[23] * 100.0 / 35;  //
-  f = zone7;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE7_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
-
-  uint8_t zone8 = data[24] * 100.0 / 35;  //
-  f = zone8;
-  this->send_datapoint_(EconetDatapointID{.name = "ZONESTAT_ZONE8_PERCENT_OPEN", .address = 0},
-                        EconetDatapoint{.value_raw = {}, .value_string = "", .value_float = f, .type = edt});
 }
 
 void Econet::read_buffer_(int bytes_available) {
